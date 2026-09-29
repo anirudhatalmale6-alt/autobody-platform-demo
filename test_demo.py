@@ -7,7 +7,11 @@ import sys
 from playwright.sync_api import sync_playwright
 
 import os
-URL = "http://127.0.0.1:" + os.environ["PORT"] + "/index.html"
+
+# DEMO_URL runs the same suite against the deployed copy, so the published
+# site is verified rather than assumed from a local pass.
+URL = os.environ.get("DEMO_URL") or \
+    "http://127.0.0.1:" + os.environ["PORT"] + "/index.html"
 SHOT = "/var/lib/freelancer/projects/40739456/demo/shots/"
 IMG = "/var/lib/freelancer/projects/40739456/demo/images/"
 
