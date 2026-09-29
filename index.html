@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Before / After slider + estimate request - working demo</title>
+<style>
+  :root{
+    --ink:#101418;
+    --ink-2:#3d4854;
+    --line:#dfe4ea;
+    --bg:#ffffff;
+    --panel:#f5f7f9;
+    --accent:#b4231f;
+    --accent-ink:#ffffff;
+    --ok:#12794a;
+    --err:#b4231f;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(16,20,24,.06), 0 8px 28px rgba(16,20,24,.08);
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+
+  /* ---------- header ---------- */
+  header{border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);z-index:20}
+  .bar{display:flex;align-items:center;gap:16px;min-height:64px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.01em;margin-right:auto}
+  .brand .mark{width:30px;height:30px;border-radius:7px;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:15px;font-weight:800}
+  .brand small{display:block;font-weight:500;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2)}
+
+  /* language switch */
+  .lang{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:#fff}
+  .lang button{
+    appearance:none;border:0;background:transparent;cursor:pointer;
+    padding:7px 15px;font:inherit;font-size:14px;font-weight:600;color:var(--ink-2);
+  }
+  .lang button[aria-pressed="true"]{background:var(--ink);color:#fff}
+  .lang button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+  /* ---------- sections ---------- */
+  section{padding:46px 0;border-bottom:1px solid var(--line)}
+  h1{font-size:clamp(25px,4.2vw,36px);line-height:1.18;margin:0 0 10px;letter-spacing:-.02em}
+  h2{font-size:clamp(20px,3vw,26px);margin:0 0 8px;letter-spacing:-.01em}
+  .lede{color:var(--ink-2);margin:0 0 26px;max-width:62ch}
+
+  .note{
+    background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:var(--radius);padding:14px 16px;font-size:14px;color:var(--ink-2);margin:0 0 26px
+  }
+  .note strong{color:var(--ink)}
+
+  /* ---------- comparison slider ---------- */
+  .compare{
+    position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;
+    border-radius:var(--radius);box-shadow:var(--shadow);background:#20242b;
+    touch-action:pan-y; user-select:none;
+  }
+  .compare img{
+    position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;
+    -webkit-user-drag:none;user-select:none;pointer-events:none;
+  }
+  /* the AFTER frame is revealed from the left up to --pos */
+  .compare .after{clip-path:inset(0 calc(100% - var(--pos)) 0 0)}
+
+  .compare .tag{
+    position:absolute;top:12px;padding:5px 11px;border-radius:999px;
+    font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    background:rgba(8,10,13,.72);color:#fff;pointer-events:none;
+    transition:opacity .15s ease;
+  }
+  .compare .tag.l{left:12px}
+  .compare .tag.r{right:12px}
+
+  .compare .divider{
+    position:absolute;top:0;bottom:0;left:var(--pos);width:2px;
+    background:#fff;transform:translateX(-1px);pointer-events:none;
+    box-shadow:0 0 0 1px rgba(8,10,13,.28);
+  }
+  .compare .knob{
+    position:absolute;top:50%;left:var(--pos);width:44px;height:44px;border-radius:50%;
+    transform:translate(-50%,-50%);background:#fff;pointer-events:none;
+    box-shadow:0 2px 10px rgba(8,10,13,.4);
+    display:grid;place-items:center;color:var(--ink);
+  }
+  .compare .knob svg{width:22px;height:22px;display:block}
+
+  /* the real control: a full-bleed range input. Gives us pointer drag,
+     touch, click-to-jump, keyboard arrows and screen-reader support
+     without reimplementing any of it. */
+  .compare input[type=range]{
+    position:absolute;inset:0;width:100%;height:100%;margin:0;
+    appearance:none;background:transparent;cursor:ew-resize;
+  }
+  .compare input[type=range]::-webkit-slider-thumb{
+    appearance:none;width:46px;height:100vh;background:transparent;cursor:ew-resize
+  }
+  .compare input[type=range]::-moz-range-thumb{
+    width:46px;height:100vh;border:0;background:transparent;cursor:ew-resize
+  }
+  .compare input[type=range]:focus{outline:none}
+  .compare:has(input:focus-visible){outline:3px solid var(--accent);outline-offset:3px}
+
+  .hint{font-size:13px;color:var(--ink-2);margin:12px 0 0;text-align:center}
+
+  /* ---------- form ---------- */
+  form{display:grid;gap:18px;max-width:720px}
+  .row{display:grid;gap:18px;grid-template-columns:1fr 1fr}
+  @media (max-width:640px){.row{grid-template-columns:1fr}}
+  .field{display:flex;flex-direction:column;gap:6px;min-width:0}
+  label{font-size:14px;font-weight:600}
+  label .opt{font-weight:400;color:var(--ink-2)}
+  input[type=text],input[type=tel],input[type=email],select,textarea{
+    font:inherit;color:var(--ink);background:#fff;
+    border:1px solid var(--line);border-radius:8px;padding:11px 12px;width:100%;
+  }
+  textarea{resize:vertical;min-height:110px}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+  [aria-invalid="true"]{border-color:var(--err);background:#fdf5f5}
+  .err{color:var(--err);font-size:13px;min-height:0}
+  .err:empty{display:none}
+
+  /* upload */
+  .drop{
+    border:2px dashed var(--line);border-radius:var(--radius);background:var(--panel);
+    padding:26px 18px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;
+  }
+  .drop:hover,.drop.over{border-color:var(--accent);background:#fbf3f3}
+  .drop:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .drop b{display:block;margin-bottom:3px}
+  .drop span{font-size:13px;color:var(--ink-2)}
+  .drop input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+
+  .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:12px}
+  .thumbs:empty{display:none}
+  .thumb{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:#000;aspect-ratio:4/3}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .thumb .name{
+    position:absolute;left:0;right:0;bottom:0;padding:4px 6px;font-size:11px;color:#fff;
+    background:rgba(8,10,13,.72);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .thumb button{
+    position:absolute;top:5px;right:5px;width:24px;height:24px;border-radius:50%;
+    border:0;background:rgba(8,10,13,.78);color:#fff;font-size:15px;line-height:1;cursor:pointer;
+    display:grid;place-items:center;padding:0;
+  }
+  .thumb button:hover{background:var(--err)}
+
+  .submit{
+    appearance:none;border:0;border-radius:8px;background:var(--accent);color:var(--accent-ink);
+    font:inherit;font-weight:700;padding:13px 26px;cursor:pointer;justify-self:start;
+  }
+  .submit:hover{filter:brightness(1.07)}
+  .submit:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+  .result{
+    border:1px solid var(--line);border-left:3px solid var(--ok);background:var(--panel);
+    border-radius:var(--radius);padding:16px;font-size:14px;
+  }
+  .result[hidden]{display:none}
+  .result h3{margin:0 0 8px;font-size:15px;color:var(--ok)}
+  .result dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0}
+  .result dt{color:var(--ink-2)}
+  .result dd{margin:0;word-break:break-word}
+
+  footer{padding:30px 0 50px;color:var(--ink-2);font-size:13px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">AB</span>
+      <span>
+        <span data-i18n="brand">Auto Body Shop</span>
+        <small data-i18n="brandSub">Working demo</small>
+      </span>
+    </div>
+    <div class="lang" role="group" aria-label="Language / Idioma">
+      <button type="button" data-lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-lang="es" aria-pressed="false">ES</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<section>
+  <div class="wrap">
+    <h1 data-i18n="h1">Before and after, with a slider that actually works</h1>
+    <p class="lede" data-i18n="lede">Two things from the brief, built and running so you can test them on your own phone rather than take my word for it: the comparison slider, and the estimate request with vehicle photo uploads. Every word on this page switches between English and Spanish.</p>
+
+    <div class="note">
+      <strong data-i18n="noteT">About these images:</strong>
+      <span data-i18n="noteB">these are generated placeholders, not the shop's work. Send me one real before/after pair and I'll swap them in. Note that both frames here share the same angle, distance and crop — that is the one thing a comparison slider needs, and it is what to check before shooting new pairs.</span>
+    </div>
+
+    <div class="compare" id="cmp" style="--pos:50%">
+      <img class="before" src="images/demo-before.jpg" alt="" width="1600" height="1000">
+      <img class="after"  src="images/demo-after.jpg"  alt="" width="1600" height="1000">
+      <span class="tag l" data-i18n="after">After</span>
+      <span class="tag r" data-i18n="before">Before</span>
+      <span class="divider"></span>
+      <span class="knob" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 6 3 12l6 6M15 6l6 6-6 6"/>
+        </svg>
+      </span>
+      <input type="range" min="0" max="100" value="50" step="0.1" id="cmpRange" aria-label="Reveal the repaired photo">
+    </div>
+    <p class="hint" data-i18n="hint">Drag the handle, tap anywhere on the photo, or focus it and use the arrow keys.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 data-i18n="h2">Request an estimate</h2>
+    <p class="lede" data-i18n="lede2">Photos attach, preview, and can be removed before sending. Size, type and count are all checked in the browser, with errors in the selected language.</p>
+
+    <div class="note">
+      <strong data-i18n="note2T">Demo behaviour:</strong>
+      <span data-i18n="note2B">this form validates and previews for real, but nothing is uploaded and nothing is stored — submitting just shows you what the server would receive. On the live build it writes to the database, stores the photos, emails the shop and opens the job in the owner dashboard.</span>
+    </div>
+
+    <form id="estimate" novalidate>
+      <div class="row">
+        <div class="field">
+          <label for="name" data-i18n="fName">Full name</label>
+          <input type="text" id="name" name="name" autocomplete="name">
+          <p class="err" data-err="name"></p>
+        </div>
+        <div class="field">
+          <label for="phone" data-i18n="fPhone">Phone</label>
+          <input type="tel" id="phone" name="phone" autocomplete="tel">
+          <p class="err" data-err="phone"></p>
+        </div>
+      </div>
+
+      <div class="field">
+        <!-- The translatable text sits in its own span. Putting data-i18n on
+             the <label> itself would wipe the nested "(optional)" hint, since
+             setting textContent replaces every child node. -->
+        <label for="email"><span data-i18n="fEmail">Email</span> <span class="opt" data-i18n="optional">(optional)</span></label>
+        <input type="email" id="email" name="email" autocomplete="email">
+        <p class="err" data-err="email"></p>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="year" data-i18n="fYear">Vehicle year</label>
+          <select id="year" name="year"></select>
+          <p class="err" data-err="year"></p>
+        </div>
+        <div class="field">
+          <label for="makemodel" data-i18n="fMake">Make and model</label>
+          <input type="text" id="makemodel" name="makemodel" placeholder="Toyota Camry">
+          <p class="err" data-err="makemodel"></p>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="service" data-i18n="fService">What do you need?</label>
+        <select id="service" name="service"></select>
+      </div>
+
+      <div class="field">
+        <label for="desc" data-i18n="fDesc">Describe the damage</label>
+        <textarea id="desc" name="desc"></textarea>
+        <p class="err" data-err="desc"></p>
+      </div>
+
+      <div class="field">
+        <label for="photos" data-i18n="fPhotos">Photos of the damage</label>
+        <div class="drop" id="drop" tabindex="0" role="button" aria-controls="thumbs">
+          <b data-i18n="dropT">Tap to choose photos, or drag them here</b>
+          <span data-i18n="dropB">JPG, PNG, HEIC or WebP · up to 10 MB each · maximum 8 photos</span>
+          <input type="file" id="photos" name="photos" accept="image/*" multiple>
+        </div>
+        <p class="err" data-err="photos"></p>
+        <div class="thumbs" id="thumbs"></div>
+      </div>
+
+      <button class="submit" type="submit" data-i18n="send">Send request</button>
+
+      <div class="result" id="result" hidden aria-live="polite">
+        <h3 data-i18n="okT">Validated — this is what would be sent</h3>
+        <dl id="resultBody"></dl>
+      </div>
+    </form>
+  </div>
+</section>
+
+</main>
+
+<footer class="wrap">
+  <span data-i18n="foot">Demo built for the auto body shop platform brief. Placeholder imagery throughout.</span>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ------------------------------------------------------------------ *
+   * Copy. Both languages live here so a translator can be handed one
+   * object rather than hunting strings through the markup.
+   * ------------------------------------------------------------------ */
+  var I18N = {
+    en: {
+      brand:"Auto Body Shop", brandSub:"Working demo",
+      h1:"Before and after, with a slider that actually works",
+      lede:"Two things from the brief, built and running so you can test them on your own phone rather than take my word for it: the comparison slider, and the estimate request with vehicle photo uploads. Every word on this page switches between English and Spanish.",
+      noteT:"About these images:",
+      noteB:"these are generated placeholders, not the shop's work. Send me one real before/after pair and I'll swap them in. Note that both frames here share the same angle, distance and crop — that is the one thing a comparison slider needs, and it is what to check before shooting new pairs.",
+      before:"Before", after:"After",
+      hint:"Drag the handle, tap anywhere on the photo, or focus it and use the arrow keys.",
+      h2:"Request an estimate",
+      lede2:"Photos attach, preview, and can be removed before sending. Size, type and count are all checked in the browser, with errors in the selected language.",
+      note2T:"Demo behaviour:",
+      note2B:"this form validates and previews for real, but nothing is uploaded and nothing is stored — submitting just shows you what the server would receive. On the live build it writes to the database, stores the photos, emails the shop and opens the job in the owner dashboard.",
+      fName:"Full name", fPhone:"Phone", fEmail:"Email", optional:"(optional)",
+      fYear:"Vehicle year", fMake:"Make and model", fService:"What do you need?",
+      fDesc:"Describe the damage", fPhotos:"Photos of the damage",
+      dropT:"Tap to choose photos, or drag them here",
+      dropB:"JPG, PNG, HEIC or WebP · up to 10 MB each · maximum 8 photos",
+      send:"Send request",
+      okT:"Validated — this is what would be sent",
+      foot:"Demo built for the auto body shop platform brief. Placeholder imagery throughout.",
+      yearAny:"Select a year",
+      services:["Collision repair","Paint and refinish","Dent removal","Classic restoration","Insurance claim assistance","Rental vehicle enquiry","Something else"],
+      eName:"Please enter your name.",
+      ePhone:"Please enter a phone number we can reach you on.",
+      ePhoneBad:"That phone number looks too short.",
+      eEmailBad:"That email address doesn't look right.",
+      eYear:"Please select the vehicle year.",
+      eMake:"Please enter the make and model.",
+      eDesc:"Please tell us briefly what happened.",
+      eDescShort:"Just a little more detail, please — at least 10 characters.",
+      eType:"{name} isn't an image file and was skipped.",
+      eSize:"{name} is {size} — the limit is 10 MB per photo.",
+      eMax:"Maximum 8 photos. {n} were not added.",
+      remove:"Remove {name}",
+      rName:"Name", rPhone:"Phone", rEmail:"Email", rVehicle:"Vehicle",
+      rService:"Service", rDesc:"Description", rPhotos:"Photos", rLang:"Submitted in",
+      rNone:"none", langName:"English"
+    },
+    es: {
+      brand:"Taller de Carrocería", brandSub:"Demostración funcional",
+      h1:"Antes y después, con un comparador que sí funciona",
+      lede:"Dos puntos del proyecto, ya construidos y funcionando para que los pruebe en su propio teléfono en lugar de creer en mi palabra: el comparador de imágenes y la solicitud de presupuesto con carga de fotos del vehículo. Cada palabra de esta página cambia entre inglés y español.",
+      noteT:"Sobre estas imágenes:",
+      noteB:"son marcadores generados, no trabajos del taller. Envíeme un par real de antes y después y los sustituyo. Fíjese en que ambas tomas comparten el mismo ángulo, la misma distancia y el mismo encuadre: eso es lo único que necesita un comparador, y es lo que hay que comprobar antes de fotografiar pares nuevos.",
+      before:"Antes", after:"Después",
+      hint:"Arrastre el control, toque cualquier punto de la foto o enfóquelo y use las flechas del teclado.",
+      h2:"Solicitar un presupuesto",
+      lede2:"Las fotos se adjuntan, se previsualizan y se pueden quitar antes de enviar. El tamaño, el tipo y la cantidad se comprueban en el navegador, con los errores en el idioma seleccionado.",
+      note2T:"Comportamiento de la demostración:",
+      note2B:"este formulario valida y previsualiza de verdad, pero no sube ni guarda nada: al enviar solo se muestra lo que recibiría el servidor. En la versión final se guarda en la base de datos, se almacenan las fotos, se avisa al taller por correo y el trabajo aparece en el panel del propietario.",
+      fName:"Nombre completo", fPhone:"Teléfono", fEmail:"Correo electrónico", optional:"(opcional)",
+      fYear:"Año del vehículo", fMake:"Marca y modelo", fService:"¿Qué necesita?",
+      fDesc:"Describa los daños", fPhotos:"Fotos de los daños",
+      dropT:"Toque para elegir fotos o arrástrelas aquí",
+      dropB:"JPG, PNG, HEIC o WebP · hasta 10 MB cada una · máximo 8 fotos",
+      send:"Enviar solicitud",
+      okT:"Validado: esto es lo que se enviaría",
+      foot:"Demostración creada para el proyecto de la plataforma del taller. Todas las imágenes son marcadores.",
+      yearAny:"Seleccione un año",
+      services:["Reparación de colisión","Pintura y acabado","Eliminación de abolladuras","Restauración de clásicos","Asistencia con el seguro","Consulta sobre vehículo de alquiler","Otra cosa"],
+      eName:"Por favor, escriba su nombre.",
+      ePhone:"Por favor, indique un teléfono donde podamos localizarle.",
+      ePhoneBad:"Ese número de teléfono parece demasiado corto.",
+      eEmailBad:"Esa dirección de correo no parece correcta.",
+      eYear:"Por favor, seleccione el año del vehículo.",
+      eMake:"Por favor, indique la marca y el modelo.",
+      eDesc:"Cuéntenos brevemente qué ocurrió.",
+      eDescShort:"Un poco más de detalle, por favor: al menos 10 caracteres.",
+      eType:"{name} no es un archivo de imagen y se ha omitido.",
+      eSize:"{name} ocupa {size}; el límite es 10 MB por foto.",
+      eMax:"Máximo 8 fotos. No se añadieron {n}.",
+      remove:"Quitar {name}",
+      rName:"Nombre", rPhone:"Teléfono", rEmail:"Correo", rVehicle:"Vehículo",
+      rService:"Servicio", rDesc:"Descripción", rPhotos:"Fotos", rLang:"Enviado en",
+      rNone:"ninguna", langName:"español"
+    }
+  };
+
+  var lang = "en";
+  var t = function (k) { return I18N[lang][k]; };
+  var fill = function (s, vars) {
+    return s.replace(/\{(\w+)\}/g, function (_, k) { return vars[k]; });
+  };
+
+  /* ------------------------------------------------------------------ *
+   * Comparison slider
+   * ------------------------------------------------------------------ */
+  var cmp = document.getElementById("cmp");
+  var range = document.getElementById("cmpRange");
+
+  function paint() {
+    cmp.style.setProperty("--pos", range.value + "%");
+    // Fade each caption out as the divider reaches it, so the label never
+    // sits on top of the frame it isn't describing.
+    var v = parseFloat(range.value);
+    cmp.querySelector(".tag.l").style.opacity = v < 14 ? 0 : 1;
+    cmp.querySelector(".tag.r").style.opacity = v > 86 ? 0 : 1;
+  }
+  range.addEventListener("input", paint);
+  paint();
+
+  /* ------------------------------------------------------------------ *
+   * Estimate form
+   * ------------------------------------------------------------------ */
+  var form     = document.getElementById("estimate");
+  var fileIn   = document.getElementById("photos");
+  var drop     = document.getElementById("drop");
+  var thumbs   = document.getElementById("thumbs");
+  var result   = document.getElementById("result");
+  var yearSel  = document.getElementById("year");
+  var svcSel   = document.getElementById("service");
+
+  var MAX_FILES = 8;
+  var MAX_BYTES = 10 * 1024 * 1024;
+
+  // Chosen files are kept here rather than in the input, because a file
+  // input's FileList is read-only - you cannot remove one entry from it.
+  var picked = [];
+
+  function humanSize(b) {
+    return b >= 1048576 ? (b / 1048576).toFixed(1) + " MB"
+                        : Math.max(1, Math.round(b / 1024)) + " KB";
+  }
+
+  function setError(key, msg) {
+    var p = form.querySelector('[data-err="' + key + '"]');
+    if (p) p.textContent = msg || "";
+    var input = document.getElementById(key);
+    if (input) {
+      if (msg) input.setAttribute("aria-invalid", "true");
+      else input.removeAttribute("aria-invalid");
+    }
+  }
+
+  function clearErrors() {
+    Array.prototype.forEach.call(form.querySelectorAll(".err"), function (p) {
+      p.textContent = "";
+    });
+    Array.prototype.forEach.call(form.querySelectorAll("[aria-invalid]"), function (el) {
+      el.removeAttribute("aria-invalid");
+    });
+  }
+
+  function renderThumbs() {
+    thumbs.textContent = "";
+    picked.forEach(function (f, i) {
+      var cell = document.createElement("div");
+      cell.className = "thumb";
+
+      var img = document.createElement("img");
+      img.src = f.url;
+      img.alt = "";
+      cell.appendChild(img);
+
+      var name = document.createElement("span");
+      name.className = "name";
+      name.textContent = f.file.name;
+      cell.appendChild(name);
+
+      var rm = document.createElement("button");
+      rm.type = "button";
+      rm.textContent = "×";
+      rm.setAttribute("aria-label", fill(t("remove"), { name: f.file.name }));
+      rm.addEventListener("click", function () {
+        URL.revokeObjectURL(f.url);   // release the blob, or a long session leaks
+        picked.splice(i, 1);
+        renderThumbs();
+      });
+      cell.appendChild(rm);
+
+      thumbs.appendChild(cell);
+    });
+  }
+
+  function addFiles(list) {
+    var problems = [];
+    var overflow = 0;
+
+    Array.prototype.forEach.call(list, function (file) {
+      if (picked.length >= MAX_FILES) { overflow++; return; }
+      // HEIC from iPhones sometimes arrives with an empty type, so fall back
+      // to the extension rather than rejecting a valid photo.
+      var looksImage = /^image\//.test(file.type) ||
+                       /\.(jpe?g|png|webp|heic|heif|gif)$/i.test(file.name);
+      if (!looksImage) {
+        problems.push(fill(t("eType"), { name: file.name }));
+        return;
+      }
+      if (file.size > MAX_BYTES) {
+        problems.push(fill(t("eSize"), { name: file.name, size: humanSize(file.size) }));
+        return;
+      }
+      picked.push({ file: file, url: URL.createObjectURL(file) });
+    });
+
+    if (overflow) problems.push(fill(t("eMax"), { n: overflow }));
+    setError("photos", problems.join(" "));
+    renderThumbs();
+  }
+
+  fileIn.addEventListener("change", function () {
+    addFiles(fileIn.files);
+    fileIn.value = "";   // so re-picking the same file fires change again
+  });
+
+  drop.addEventListener("click", function () { fileIn.click(); });
+  drop.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileIn.click(); }
+  });
+  ["dragenter", "dragover"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) {
+      e.preventDefault(); drop.classList.add("over");
+    });
+  });
+  ["dragleave", "drop"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) {
+      e.preventDefault(); drop.classList.remove("over");
+    });
+  });
+  drop.addEventListener("drop", function (e) {
+    if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+  });
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    clearErrors();
+    result.hidden = true;
+
+    var v = function (id) { return document.getElementById(id).value.trim(); };
+    var firstBad = null;
+    var bad = function (id, msg) {
+      setError(id, msg);
+      if (!firstBad) firstBad = document.getElementById(id);
+    };
+
+    if (!v("name")) bad("name", t("eName"));
+
+    var phone = v("phone");
+    if (!phone) bad("phone", t("ePhone"));
+    else if (phone.replace(/\D/g, "").length < 7) bad("phone", t("ePhoneBad"));
+
+    var email = v("email");
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) bad("email", t("eEmailBad"));
+
+    if (!v("year")) bad("year", t("eYear"));
+    if (!v("makemodel")) bad("makemodel", t("eMake"));
+
+    var desc = v("desc");
+    if (!desc) bad("desc", t("eDesc"));
+    else if (desc.length < 10) bad("desc", t("eDescShort"));
+
+    if (firstBad) { firstBad.focus(); return; }
+
+    var rows = [
+      [t("rName"), v("name")],
+      [t("rPhone"), v("phone")],
+      [t("rEmail"), v("email") || "—"],
+      [t("rVehicle"), v("year") + " " + v("makemodel")],
+      [t("rService"), svcSel.value],
+      [t("rDesc"), desc],
+      [t("rPhotos"), picked.length
+        ? picked.map(function (f) { return f.file.name + " (" + humanSize(f.file.size) + ")"; }).join(", ")
+        : t("rNone")],
+      [t("rLang"), t("langName")]
+    ];
+
+    var dl = document.getElementById("resultBody");
+    dl.textContent = "";
+    rows.forEach(function (r) {
+      var dt = document.createElement("dt"); dt.textContent = r[0];
+      var dd = document.createElement("dd"); dd.textContent = r[1];
+      dl.appendChild(dt); dl.appendChild(dd);
+    });
+    result.hidden = false;
+    result.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+
+  /* ------------------------------------------------------------------ *
+   * Language switching
+   * ------------------------------------------------------------------ */
+  function buildSelects() {
+    var keepYear = yearSel.value;
+    var keepSvc  = svcSel.selectedIndex;
+
+    yearSel.textContent = "";
+    var blank = new Option(t("yearAny"), "");
+    yearSel.appendChild(blank);
+    var now = 2026;
+    for (var y = now + 1; y >= 1950; y--) yearSel.appendChild(new Option(y, y));
+    yearSel.value = keepYear;
+
+    svcSel.textContent = "";
+    t("services").forEach(function (s) { svcSel.appendChild(new Option(s, s)); });
+    svcSel.selectedIndex = keepSvc > -1 ? keepSvc : 0;
+  }
+
+  function applyLang(next) {
+    lang = next;
+    document.documentElement.lang = next;
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-i18n]"), function (el) {
+      var val = I18N[lang][el.getAttribute("data-i18n")];
+      if (typeof val === "string") el.textContent = val;
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".lang button"), function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.lang === next));
+    });
+
+    buildSelects();
+    // Re-label the remove buttons, which carry a translated aria-label.
+    renderThumbs();
+    // Any visible validation messages are now in the wrong language; the
+    // honest fix is to clear them and let the next submit restate them.
+    clearErrors();
+    result.hidden = true;
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll(".lang button"), function (b) {
+    b.addEventListener("click", function () { applyLang(b.dataset.lang); });
+  });
+
+  applyLang("en");
+})();
+</script>
+</body>
+</html>
